@@ -7,6 +7,7 @@
 #include <sstream>
 #include <iostream>
 #include <string>
+#include <map>
 #include <CL/cl.h>
 
 //#define USEOPENMP 0
@@ -382,6 +383,7 @@ template <class T>
 void Gameoflife<T>::openCL_initDevices() {
 	cl_int status;  // use as return value for most OpenCL functions
 	cl_uint numDevices = 0;
+	std::map<int,int> devicesPerPlatform;
 
 	for(unsigned int i = 0; i < mNumPlatforms; ++i) {
 		status = clGetDeviceIDs(mPlatforms[i], CL_DEVICE_TYPE_ALL, 0, NULL, 
@@ -391,14 +393,11 @@ void Gameoflife<T>::openCL_initDevices() {
 			printf("clGetDeviceIDs failed\n");
 			exit(-1);
 		}
+		
+		devicesPerPlatform.insert(std::pair<unsigned int,unsigned int>(i, numDevices));
 
 		mNumDevices += numDevices;
 	}
-
-    //// Retrive the number of devices present
-    //status = clGetDeviceIDs(mPlatforms[0], CL_DEVICE_TYPE_GPU, 0, NULL, 
-    //                       &mNumDevices);
-    
 
     // Make sure some devices were found
     if(mNumDevices == 0) {
@@ -413,8 +412,22 @@ void Gameoflife<T>::openCL_initDevices() {
        exit(-1);
     }
 
+	unsigned int count = 0;
+
 	for(unsigned int i = 0; i < mNumPlatforms; ++i) {
-		status = clGetDeviceIDs(mPlatforms[i], CL_DEVICE_TYPE_ALL, mNumDevices, &mDevices[i], NULL);
+		for(unsigned int k = 0; k < devicesPerPlatform.at(i); ++k) {
+			
+			
+			/*if(k == 0)
+				status = clGetDeviceIDs(mPlatforms[i], CL_DEVICE_TYPE_GPU, devicesPerPlatform.at(i), &mDevices[count], NULL);
+			else
+				status = clGetDeviceIDs(mPlatforms[i], CL_DEVICE_TYPE_CPU, devicesPerPlatform.at(i), &mDevices[count], NULL);*/
+			
+			// CL_DEVICE_TYPE_ALL finds CPU twice on laptop... dont no why so far
+			status = clGetDeviceIDs(mPlatforms[i], CL_DEVICE_TYPE_ALL, devicesPerPlatform.at(i), &mDevices[count], NULL);
+			
+			count++;
+		}
 		
 		if(status != CL_SUCCESS) {
 			printf("clGetDeviceIDs failed\n");
@@ -425,7 +438,7 @@ void Gameoflife<T>::openCL_initDevices() {
     // Print out some basic information about each device
     printf("%u devices detected\n", mNumDevices);
     for(unsigned int i = 0; i < mNumDevices; i++) {
-       char buf[100];
+       char buf[150];
 	   cl_uint numberBuf = 0;
 	   cl_device_type deviceType = 0;
 
