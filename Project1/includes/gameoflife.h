@@ -27,6 +27,8 @@ public:
 
 	void openCL_initPlatforms();
 	void openCL_initDevices();
+	void openCL_initContext();
+	void openCL_initCommandQueue(const int deviceID);
 	
 	
 	// std::ostream can use private array of gof
@@ -57,12 +59,19 @@ private:
 	cl_uint mNumDevices;
     cl_device_id* mDevices;
 
+	// context
+	cl_context mContext;
+
+	// command queue to selected device
+	cl_command_queue mCmdQueue;
+
 };
 
 template <class T>
 Gameoflife<T>::Gameoflife() : mData(0), mDataTmp(0), mIndexArray(0), mXDim(0), mYDim(0),
 						      mNumPlatforms(0), mPlatforms(0),
 							  mNumDevices(0), mDevices(0)
+							  
 {
 
 }
@@ -70,7 +79,9 @@ Gameoflife<T>::Gameoflife() : mData(0), mDataTmp(0), mIndexArray(0), mXDim(0), m
 template <class T>
 Gameoflife<T>::Gameoflife(const char* fileName) : mData(0), mDataTmp(0), mIndexArray(0), mXDim(0), mYDim(0),
 											      mNumPlatforms(0), mPlatforms(0),
-												  mNumDevices(0), mDevices(0)
+												  mNumDevices(0), mDevices(0),
+												  mContext(0), mCmdQueue(0)
+
 {
 	loadFile(fileName);
 
@@ -467,6 +478,36 @@ void Gameoflife<T>::openCL_initDevices() {
     }
     printf("\n");
 }
+
+
+template <class T>
+void Gameoflife<T>::openCL_initContext() {
+	cl_int status;
+
+	// Create a context and associate it with the devices
+    mContext = clCreateContext(NULL, mNumDevices, mDevices, NULL, NULL, &status);
+    if(status != CL_SUCCESS || mContext == NULL) {
+       printf("clCreateContext failed\n");
+       exit(-1);
+    }
+}
+
+template <class T>
+void Gameoflife<T>::openCL_initCommandQueue(const int deviceID) {
+	cl_int status;
+
+	if(deviceID < 0 || deviceID > (mNumDevices - 1)) {
+		__debugbreak();
+	}
+	
+	mCmdQueue = clCreateCommandQueue(mContext, mDevices[deviceID], 0, &status);
+
+	if(status != CL_SUCCESS || mCmdQueue == NULL) {
+      printf("clCreateCommandQueue failed\n");
+      exit(-1);
+   }
+}
+
 
 #endif
 

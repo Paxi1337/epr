@@ -106,6 +106,9 @@ int main(int argc, char** argv) {
 	gof->openCL_initPlatforms();
 	gof->openCL_initDevices();
 
+	gof->openCL_initContext();
+	gof->openCL_initCommandQueue(0);
+
 	if(measure)
 		std::cout << "init time in seconds " << t.getElapsedTimeInSec() << ";" << std::endl;
 
