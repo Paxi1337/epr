@@ -1,7 +1,7 @@
 #include "./includes/gameoflife.h"
 #include "./includes/Timer.h"
 
-bool useOpenMP;
+bool useOpenMP = false;
 
 int main(int argc, char** argv) {
 	char* fInFName = 0;
@@ -57,11 +57,9 @@ int main(int argc, char** argv) {
 				OutputDebugStringA("OpenMP mode\n");
 			}
 			if(strcmp(argv[i+1], "ocl") == 0) {
-				useOpenMP = true;
 				OutputDebugStringA("OpenCL mode\n");
 			}
 			else if(strcmp(argv[i+1], "seq") == 0) {
-				useOpenMP = false;
 				OutputDebugStringA("Seq mode\n");
 			}
 		}
@@ -79,11 +77,6 @@ int main(int argc, char** argv) {
 
 	}
 
-
-
-	
-
-
 	if(!fInFName) {
 		MessageBoxA(0,"You specified no input filename", "ERROR", MB_OK);
 		return -1;
@@ -97,6 +90,8 @@ int main(int argc, char** argv) {
 	if(generations == 0) 
 		generations = 250;
 
+
+
 	t.start();
 	Gameoflife<char>* gof = new Gameoflife<char>(fInFName);
 	t.stop();
@@ -108,6 +103,10 @@ int main(int argc, char** argv) {
 
 	gof->openCL_initContext();
 	gof->openCL_initCommandQueue(0);
+	gof->openCL_initMem();
+	gof->openCL_initProgram();
+	gof->openCL_initKernel();
+	gof->openCL_run();
 
 	if(measure)
 		std::cout << "init time in seconds " << t.getElapsedTimeInSec() << ";" << std::endl;
@@ -117,7 +116,7 @@ int main(int argc, char** argv) {
 		/*std::cout << gof;
 		system("cls");
 		*/
-		gof->calcGeneration();
+		gof->calcGenerationOpenMP();
 	}
 	t.stop();
 
