@@ -106,7 +106,7 @@ int main(int argc, char** argv) {
 	gof->openCL_initMem();
 	gof->openCL_initProgram();
 	gof->openCL_initKernel();
-	gof->openCL_run();
+	//gof->openCL_run(250);
 
 	if(measure)
 		std::cout << "init time in seconds " << t.getElapsedTimeInSec() << ";" << std::endl;

@@ -35,7 +35,7 @@ public:
 	void openCL_initMem();
 	void openCL_initProgram();
 	void openCL_initKernel();
-	void openCL_run();
+	void openCL_run(const int generations);
 	
 	// std::ostream can use private array of gof
 	friend std::ostream& operator<<(std::ostream& os, const Gameoflife<T>& gof);
@@ -266,7 +266,10 @@ void Gameoflife<T>::calcGeneration() {
 			}
 
 			// in case of accessing element on [-1][-1]
-			if(mIndexArray[yTop][xLeft] == 'x') {
+			//if(mIndexArray[yTop][xLeft] == 'x') {
+			//	neighbors++;
+			//}
+			if(mData[xLeft + yTop * mXDim] == 'x') {
 				neighbors++;
 			}
 
@@ -403,6 +406,8 @@ void Gameoflife<T>::calcGenerationOpenMP() {
 				}
 			}
 		}
+
+		
 	} // parallel section end 
 	memcpy(mData,mDataTmp,mXDim*mYDim+1);
 }
@@ -579,12 +584,6 @@ void Gameoflife<T>::openCL_initDevices() {
 
 	for(unsigned int i = 0; i < mNumPlatforms; ++i) {
 		for(unsigned int k = 0; k < devicesPerPlatform[i]; ++k) {
-			
-			
-			/*if(k == 0)
-				status = clGetDeviceIDs(mPlatforms[i], CL_DEVICE_TYPE_GPU, devicesPerPlatform.at(i), &mDevices[count], NULL);
-			else
-				status = clGetDeviceIDs(mPlatforms[i], CL_DEVICE_TYPE_CPU, devicesPerPlatform.at(i), &mDevices[count], NULL);*/
 			
 			// CL_DEVICE_TYPE_ALL finds CPU twice on laptop... dont no why so far
 			status = clGetDeviceIDs(mPlatforms[i], CL_DEVICE_TYPE_GPU | CL_DEVICE_TYPE_CPU, devicesPerPlatform[i], &mDevices[count], NULL);
@@ -763,34 +762,42 @@ void Gameoflife<T>::openCL_initKernel() {
 
     // Associate the input and output buffers with the kernel 
 	status = clSetKernelArg(mKernel, 0, sizeof(int), &mXDim);
-	status = clSetKernelArg(mKernel, 1, sizeof(int), &mYDim);
+	status |= clSetKernelArg(mKernel, 1, sizeof(int), &mYDim);
 	status |= clSetKernelArg(mKernel, 2, sizeof(cl_mem), &mMemIn);
     status |= clSetKernelArg(mKernel, 3, sizeof(cl_mem), &mMemOut);
-    if(status != CL_SUCCESS) {
+    
+	if(status != CL_SUCCESS) {
        printf("clSetKernelArg failed\n");
        exit(-1);
     }
 }
 
 template <class T>
-void Gameoflife<T>::openCL_run() {
+void Gameoflife<T>::openCL_run(const int generations) {
 	cl_int status;
 
 	// Define an index space (global work size) of threads for execution.  
     // A workgroup size (local work size) is not required, but can be used.
 	size_t globalWorkSize[2] = {mYDim, mXDim};
 
-    // Execute the kernel
-	status = clEnqueueNDRangeKernel(mCmdQueue, mKernel, 2, NULL, globalWorkSize, 
-                           NULL, 0, NULL, NULL);
-    if(status != CL_SUCCESS) {
-       printf("clEnqueueNDRangeKernel failed\n");
-       exit(-1);
-    }
+	// loop throught generations
+	for(int i = 0; i < generations; ++i) {
 
- //   // Read the OpenCL output buffer (d_C) to the host output array (C)
-	//clEnqueueReadBuffer(mCmdQueue, mMemOut, CL_TRUE, 0, mXDim*mYDim+1*sizeof(T), mData, 
- //                 0, NULL, NULL);
+		// execute the kernel
+		status = clEnqueueNDRangeKernel(mCmdQueue, mKernel, 2, NULL, globalWorkSize, 
+							   NULL, 0, NULL, NULL);
+		if(status != CL_SUCCESS) {
+		   printf("clEnqueueNDRangeKernel failed\n");
+		   __debugbreak();
+		   exit(-1);
+		}
+		
+		// read the buffer and copy its content to host memory (mData)
+		status = clEnqueueReadBuffer(mCmdQueue, mMemOut, CL_TRUE, 0, sizeof(T)*mXDim*mYDim+1, mData, 0, NULL, NULL); 
+
+	}
+
+
 }
 
 
