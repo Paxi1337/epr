@@ -106,28 +106,28 @@ int main(int argc, char** argv) {
 	gof->openCL_initMem();
 	gof->openCL_initProgram();
 	gof->openCL_initKernel();
-	//gof->openCL_run(250);
+	gof->openCL_run(250);
 
-	if(measure)
-		std::cout << "init time in seconds " << t.getElapsedTimeInSec() << ";" << std::endl;
+	//if(measure)
+	//	std::cout << "init time in seconds " << t.getElapsedTimeInSec() << ";" << std::endl;
 
-	t.start();
-	for(int i=0;i<generations;++i) {
-		/*std::cout << gof;
-		system("cls");
-		*/
-		gof->calcGenerationOpenMP();
-	}
-	t.stop();
+	//t.start();
+	//for(int i=0;i<generations;++i) {
+	//	/*std::cout << gof;
+	//	system("cls");
+	//	*/
+	//	gof->calcGenerationOpenMP();
+	//}
+	//t.stop();
 
-	if(measure)
-		std::cout << "kernel time in seconds " << t.getElapsedTimeInSec() << ";" << std::endl;
+	//if(measure)
+	//	std::cout << "kernel time in seconds " << t.getElapsedTimeInSec() << ";" << std::endl;
 
 
-	if(fileToCompare) {
-		if(gof->cmpFiles(fOutFName, fileToCompare))
-			MessageBoxA(0,"Files are identical", "OK", MB_OK);
-	}
+	//if(fileToCompare) {
+	//	if(gof->cmpFiles(fOutFName, fileToCompare))
+	//		MessageBoxA(0,"Files are identical", "OK", MB_OK);
+	//}
 
 	t.start();
 	gof->saveFile(fOutFName);

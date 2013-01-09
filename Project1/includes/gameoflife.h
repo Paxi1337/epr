@@ -344,7 +344,7 @@ void Gameoflife<T>::calcGenerationOpenMP() {
 				}
 
 				if(x==mXDim-1) {
-					xRight = (x+1+mXDim)%mXDim;
+					xRight = (x+1)%mXDim;
 				}
 
 				if(y==0) {
@@ -352,7 +352,7 @@ void Gameoflife<T>::calcGenerationOpenMP() {
 				}
 
 				if(y==mYDim-1) {
-					yBot = (y+1+mYDim)%mYDim;
+					yBot = (y+1)%mYDim;
 				}
 
 				// in case of accessing element on [-1][-1]
@@ -792,11 +792,11 @@ void Gameoflife<T>::openCL_run(const int generations) {
 		   exit(-1);
 		}
 		
-		// read the buffer and copy its content to host memory (mData)
-		status = clEnqueueReadBuffer(mCmdQueue, mMemOut, CL_TRUE, 0, sizeof(T)*mXDim*mYDim+1, mData, 0, NULL, NULL); 
-
+		
 	}
 
+	// read the buffer and copy its content to host memory (mData)
+	status = clEnqueueReadBuffer(mCmdQueue, mMemOut, CL_TRUE, 0, sizeof(T)*mXDim*mYDim+1, mData, 0, NULL, NULL); 
 
 }
 
