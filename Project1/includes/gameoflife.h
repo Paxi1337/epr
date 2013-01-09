@@ -552,10 +552,8 @@ void Gameoflife<T>::openCL_initDevices() {
 			//exit(-1);
 			
 		}
-		
 		else {
-			devicesPerPlatform[i]++;
-
+			devicesPerPlatform[i] += numDevices;
 			mNumDevices += numDevices;
 		}
 		
@@ -566,7 +564,10 @@ void Gameoflife<T>::openCL_initDevices() {
        printf("No devices detected.\n");
        //exit(-1);
     }
-
+	else {
+		printf("%d\n", mNumDevices);
+	}
+	
     // Allocate enough space for each device
     mDevices = (cl_device_id*)malloc(mNumDevices*sizeof(cl_device_id));
     if(mDevices == NULL) {
@@ -626,7 +627,8 @@ void Gameoflife<T>::openCL_initDevices() {
 
        if(status != CL_SUCCESS) {
           printf("clGetDeviceInfo failed\n");
-          exit(-1);
+          //exit(-1);
+		  __debugbreak();
        }
     }
     printf("\n");
@@ -638,10 +640,12 @@ void Gameoflife<T>::openCL_initContext() {
 	cl_int status;
 
 	//// Create a context and associate it with the devices
-	mContext = clCreateContext(NULL, 1, mDevices, NULL, NULL, &status);
+	mContext = clCreateContext(NULL, 1, &mDevices[0], NULL, NULL, &status);
+	//mContext = clCreateContext(NULL, 1, &mDevices[1], NULL, NULL, &status);
     if(status != CL_SUCCESS || mContext == NULL) {
        printf("clCreateContext failed\n");
-       exit(-1);
+       //exit(-1);
+	   __debugbreak();
     }
 	printf("created context to device 1 (Desktop: GTX680 / Ultrabook: GTX650M)\n");
 
@@ -758,8 +762,10 @@ void Gameoflife<T>::openCL_initKernel() {
     }
 
     // Associate the input and output buffers with the kernel 
-	status  = clSetKernelArg(mKernel, 0, sizeof(cl_mem), &mMemIn);
-    status |= clSetKernelArg(mKernel, 1, sizeof(cl_mem), &mMemOut);
+	status = clSetKernelArg(mKernel, 0, sizeof(int), &mXDim);
+	status = clSetKernelArg(mKernel, 1, sizeof(int), &mYDim);
+	status |= clSetKernelArg(mKernel, 2, sizeof(cl_mem), &mMemIn);
+    status |= clSetKernelArg(mKernel, 3, sizeof(cl_mem), &mMemOut);
     if(status != CL_SUCCESS) {
        printf("clSetKernelArg failed\n");
        exit(-1);
