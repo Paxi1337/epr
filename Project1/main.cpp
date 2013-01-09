@@ -106,7 +106,13 @@ int main(int argc, char** argv) {
 	gof->openCL_initMem();
 	gof->openCL_initProgram();
 	gof->openCL_initKernel();
+
+	t.start();
 	gof->openCL_run(250);
+	t.stop();
+
+	if(measure)
+		std::cout << "OpenCLKernel execution time in seconds " << t.getElapsedTimeInSec() << ";" << std::endl;
 
 	//if(measure)
 	//	std::cout << "init time in seconds " << t.getElapsedTimeInSec() << ";" << std::endl;

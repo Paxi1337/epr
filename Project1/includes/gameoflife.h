@@ -778,7 +778,7 @@ void Gameoflife<T>::openCL_run(const int generations) {
 
 	// Define an index space (global work size) of threads for execution.  
     // A workgroup size (local work size) is not required, but can be used.
-	size_t globalWorkSize[2] = {mYDim, mXDim};
+	size_t globalWorkSize[2] = {mXDim, mYDim};
 
 	// loop throught generations
 	for(int i = 0; i < generations; ++i) {
@@ -792,11 +792,23 @@ void Gameoflife<T>::openCL_run(const int generations) {
 		   exit(-1);
 		}
 		
-		
+		status = clEnqueueCopyBuffer(mCmdQueue, mMemOut, mMemIn, 0,0, sizeof(T)*mXDim*mYDim+1, 0, NULL, NULL); 	
+
+		if(status != CL_SUCCESS) {
+		   printf("clEnqueueCopyBuffer failed\n");
+		   __debugbreak();
+		   exit(-1);
+		}
 	}
 
 	// read the buffer and copy its content to host memory (mData)
-	status = clEnqueueReadBuffer(mCmdQueue, mMemOut, CL_TRUE, 0, sizeof(T)*mXDim*mYDim+1, mData, 0, NULL, NULL); 
+	status = clEnqueueReadBuffer(mCmdQueue, mMemOut, CL_TRUE, 0, sizeof(T)*mXDim*mYDim+1, mData, 0, NULL, NULL);
+
+	if(status != CL_SUCCESS) {
+		printf("clEnqueueReadBuffer failed\n");
+		__debugbreak();
+		exit(-1);
+	}
 
 }
 
