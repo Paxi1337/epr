@@ -1,13 +1,12 @@
 #include "./includes/gameoflife.h"
 #include "./includes/Timer.h"
 
-bool useOpenMP = false;
-
 int main(int argc, char** argv) {
 	char* fInFName = 0;
 	char* fOutFName = 0;
 	char* fileToCompare = 0;
 	int generations = 0;
+	int nthreads = 1;
 	bool measure = false;
 
 	Timer t;
@@ -51,16 +50,27 @@ int main(int argc, char** argv) {
 			measure = true;
 		}
 
+		// check for mode to run
 		else if(strcmp(argv[i], "--mode") == 0) {
+			
+			// OpenMP Mode selected
 			if(strcmp(argv[i+1], "omp") == 0) {
-				useOpenMP = true;
-				OutputDebugStringA("OpenMP mode\n");
+				
+				if(strcmp(argv[i+2], "--threads") == 0) {
+					nthreads = atoi(argv[i+3]);
+
+					if(nthreads < 1 || nthreads > 16) {
+						MessageBoxA(0,"Threadnumber may not be bellow 1 or above 16", "ERROR", MB_OK);
+						return -1;
+					}
+
+				}
 			}
 			if(strcmp(argv[i+1], "ocl") == 0) {
 				OutputDebugStringA("OpenCL mode\n");
 			}
 			else if(strcmp(argv[i+1], "seq") == 0) {
-				OutputDebugStringA("Seq mode\n");
+				// nothing to do in here, the programs just runs with one thread
 			}
 		}
 
@@ -102,7 +112,7 @@ int main(int argc, char** argv) {
 	gof->openCL_initDevices();
 
 	gof->openCL_initContext();
-	gof->openCL_initCommandQueue(0);
+	gof->openCL_initCommandQueue();
 	gof->openCL_initMem();
 	gof->openCL_initProgram();
 	gof->openCL_initKernel();

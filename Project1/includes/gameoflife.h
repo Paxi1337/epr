@@ -9,13 +9,24 @@
 #include <string>
 #include <map>
 #include <CL/cl.h>
+#include <omp.h>
+
+enum Mode {
+	SEQ,
+	OPENMP,
+	OPENCL
+};
+
+enum Devicetype {
+	CPU,
+	GPU
+};
 
 char* readSource(const char *sourceFilename);
 
 template <class T>
 class Gameoflife {
 public:
-	Gameoflife();
 	explicit Gameoflife(const char* fileName);
 	~Gameoflife();
 
@@ -27,11 +38,14 @@ public:
 	// openMP 
 	bool loadFileOpenMP(const char* fileName);
 	void calcGenerationOpenMP(void);
+	inline void setThreadCount(const int nthreads) { mThreadCount = nthreads; }
 
+	// openCL
+	inline void openCL_chooseDeviceType(Devicetype deviceType) { mSelectedDeviceType = deviceType; }
 	void openCL_initPlatforms();
 	void openCL_initDevices();
 	void openCL_initContext();
-	void openCL_initCommandQueue(const int deviceID);
+	void openCL_initCommandQueue();
 	void openCL_initMem();
 	void openCL_initProgram();
 	void openCL_initKernel();
@@ -54,8 +68,15 @@ private:
 	int mXDim;
 	int mYDim;
 
+	int mThreadCount;
 
 	//OPENCL specific code
+
+	// selected device type (CPU or GPU)
+	Devicetype mSelectedDeviceType;
+
+	// index into mDevices for the current selected device
+	int mSelectedDeviceIndex;
 
 	// platforms
 	cl_uint mNumPlatforms;
@@ -80,23 +101,16 @@ private:
 
 	// kernel running on the GPU
 	cl_kernel mKernel;
-
 };
 
 template <class T>
-Gameoflife<T>::Gameoflife() : mData(0), mDataTmp(0), mIndexArray(0), mXDim(0), mYDim(0),
-						      mNumPlatforms(0), mPlatforms(0),
-							  mNumDevices(0), mDevices(0)
-							  
-{
-
-}
-
-template <class T>
-Gameoflife<T>::Gameoflife(const char* fileName) : mData(0), mDataTmp(0), mIndexArray(0), mXDim(0), mYDim(0),
+Gameoflife<T>::Gameoflife(const char* fileName) : mData(0), mDataTmp(0), mIndexArray(0), mXDim(0), mYDim(0), mThreadCount(1),
 											      mNumPlatforms(0), mPlatforms(0),
 												  mNumDevices(0), mDevices(0),
-												  mContext(0), mCmdQueue(0)
+												  mContext(0), mCmdQueue(0),
+												  mMemIn(0), mMemOut(0),
+												  mProgram(0), mKernel(0),
+												  mSelectedDeviceIndex(0), mSelectedDeviceType(GPU)
 
 {
 	loadFile(fileName);
@@ -266,10 +280,7 @@ void Gameoflife<T>::calcGeneration() {
 			}
 
 			// in case of accessing element on [-1][-1]
-			//if(mIndexArray[yTop][xLeft] == 'x') {
-			//	neighbors++;
-			//}
-			if(mData[xLeft + yTop * mXDim] == 'x') {
+			if(mIndexArray[yTop][xLeft] == 'x') {
 				neighbors++;
 			}
 
@@ -324,8 +335,13 @@ void Gameoflife<T>::calcGeneration() {
 
 template <class T>
 void Gameoflife<T>::calcGenerationOpenMP() {
-	#pragma omp parallel 
+	
+	omp_set_num_threads(4);
+	
+	#pragma omp parallel
 	{
+		int nthreads = omp_get_num_threads();
+		
 		#pragma omp for
 
 		for(int y=0;y<mYDim;++y) {
@@ -490,6 +506,19 @@ std::ostream& operator<<(std::ostream& os, const Gameoflife<T>& gol) {
 	return os;
 }
 
+
+	
+//template <class T>
+//void Gameoflife<T>::void setThreadCount(const int nthreads) {
+//
+//}
+//
+//
+//template <class T>
+//void Gameoflife<T>::openCL_chooseDeviceType(Devicetype deviceType) {
+//
+//}
+
 template <class T>
 void Gameoflife<T>::openCL_initPlatforms() {
 	cl_int status;  // use as return value for most OpenCL functions
@@ -553,9 +582,9 @@ void Gameoflife<T>::openCL_initDevices() {
                            &numDevices);
 		
 		if(status != CL_SUCCESS) {
-			printf("clGetDeviceIDs failed\n");
-			//exit(-1);
-			
+			std::cout << "clGetDeviceIDs failed" << std::endl;
+			__debugbreak();
+			exit(-1);
 		}
 		else {
 			devicesPerPlatform[i] += numDevices;
@@ -566,17 +595,16 @@ void Gameoflife<T>::openCL_initDevices() {
 
     // Make sure some devices were found
     if(mNumDevices == 0) {
-       printf("No devices detected.\n");
-       //exit(-1);
+       std::cout << "No devices detected" << std::endl;
+	   __debugbreak();
+       exit(-1);
     }
-	else {
-		printf("%d\n", mNumDevices);
-	}
-	
+
     // Allocate enough space for each device
     mDevices = (cl_device_id*)malloc(mNumDevices*sizeof(cl_device_id));
     if(mDevices == NULL) {
-       perror("malloc");
+       std::cerr << "malloc failed" << std::endl;
+	   __debugbreak();
        exit(-1);
     }
 
@@ -589,48 +617,58 @@ void Gameoflife<T>::openCL_initDevices() {
 			status = clGetDeviceIDs(mPlatforms[i], CL_DEVICE_TYPE_GPU | CL_DEVICE_TYPE_CPU, devicesPerPlatform[i], &mDevices[count], NULL);
 			
 			if(status != CL_SUCCESS) {
-				printf("clGetDeviceIDs failed\n");
-				//exit(-1);
+				std::cout << "clGetDeviceIDs failed" << std::endl;
+				__debugbreak();
+				exit(-1);
 			}
-
 			count++;
 		}
-		
-		
 	}
 
     // Print out some basic information about each device
-    printf("%u devices detected\n", mNumDevices);
+    std::cout << mNumDevices << "devices detected\n" << std::endl;
+
     for(unsigned int i = 0; i < mNumDevices; i++) {
        char buf[150];
 	   cl_uint numberBuf = 0;
 	   cl_device_type deviceType = 0;
 
-       printf("Device %u: \n", i);
+       std::cout << "Device ID: " << i << std::endl;
        
 	   status = clGetDeviceInfo(mDevices[i], CL_DEVICE_VENDOR,
                         sizeof(buf), buf, NULL);
-	   printf("\tDevice: %s\n", buf);
+	   std::cout << "Vendor: " << buf << std::endl;
        
 	   status |= clGetDeviceInfo(mDevices[i], CL_DEVICE_NAME,
                         sizeof(buf), buf, NULL);
-       printf("\tName: %s\n", buf);
+       std::cout << "Name: " << buf << std::endl;
 
 	   status = clGetDeviceInfo(mDevices[i], CL_DEVICE_TYPE,
                         sizeof(deviceType), &deviceType, NULL);
-       printf("\tDevice Type: %d\n", deviceType);
+       std::cout << "Type: " << ((deviceType==CL_DEVICE_TYPE_CPU)?"CPU":"GPU") << std::endl;
 
+	   // select device
+	   if(mSelectedDeviceType == CPU && deviceType == CL_DEVICE_TYPE_CPU) {
+		   mSelectedDeviceIndex = i;
+	   }
+	   else if(mSelectedDeviceType == GPU && deviceType == CL_DEVICE_TYPE_GPU) {
+	       mSelectedDeviceIndex = i;
+	   }
+	   
 	   status |= clGetDeviceInfo(mDevices[i], CL_DEVICE_MAX_COMPUTE_UNITS,
                         sizeof(numberBuf), &numberBuf, NULL);
-       printf("\tMax compute units: %d\n", numberBuf);
+       std::cout << "Max compute units: " << numberBuf << std::endl;
 
        if(status != CL_SUCCESS) {
-          printf("clGetDeviceInfo failed\n");
-          //exit(-1);
+          std::cout << "clGetDeviceInfo failed" << std::endl;
 		  __debugbreak();
+		  exit(-1);
        }
+
+	   std::cout << std::endl;
     }
-    printf("\n");
+
+    std::cout << std::endl;
 }
 
 
@@ -639,29 +677,29 @@ void Gameoflife<T>::openCL_initContext() {
 	cl_int status;
 
 	//// Create a context and associate it with the devices
-	mContext = clCreateContext(NULL, 1, &mDevices[0], NULL, NULL, &status);
-	//mContext = clCreateContext(NULL, 1, &mDevices[1], NULL, NULL, &status);
+	mContext = clCreateContext(NULL, 1, &mDevices[mSelectedDeviceIndex], NULL, NULL, &status);
+	
     if(status != CL_SUCCESS || mContext == NULL) {
-       printf("clCreateContext failed\n");
-       //exit(-1);
+       std::cout << "clCreateContext failed" << std::endl;
 	   __debugbreak();
     }
-	printf("created context to device 1 (Desktop: GTX680 / Ultrabook: GTX650M)\n");
 
+	//char buf[150];
+	//clGetDeviceInfo(mDevices[mSelectedDeviceIndex], CL_DEVICE_NAME, sizeof(buf), buf, NULL);
+   
+	//printf("Created context to device %d : %s\n", mSelectedDeviceIndex, buf+6);
+	std::cout << "created context to device " << mSelectedDeviceIndex << std::endl;
 }
 
 template <class T>
-void Gameoflife<T>::openCL_initCommandQueue(const int deviceID) {
+void Gameoflife<T>::openCL_initCommandQueue() {
 	cl_int status;
 
-	if(deviceID < 0 || deviceID > (mNumDevices - 1)) {
-		__debugbreak();
-	}
-	
-	mCmdQueue = clCreateCommandQueue(mContext, mDevices[deviceID], 0, &status);
+	mCmdQueue = clCreateCommandQueue(mContext, mDevices[mSelectedDeviceIndex], 0, &status);
 
 	if(status != CL_SUCCESS || mCmdQueue == NULL) {
       printf("clCreateCommandQueue failed\n");
+	  __debugbreak();
       exit(-1);
    }
 }
@@ -708,39 +746,37 @@ void Gameoflife<T>::openCL_initProgram() {
     // Build (compile & link) the program for the devices.
     // Save the return value in 'buildErr' (the following 
     // code will print any compilation errors to the screen)
-    buildErr = clBuildProgram(mProgram, 1, mDevices, NULL, NULL, NULL);
+    buildErr = clBuildProgram(mProgram, 1, &mDevices[mSelectedDeviceIndex], NULL, NULL, NULL);
 
     // If there are build errors, print them to the screen
     if(buildErr != CL_SUCCESS) {
        printf("Program failed to build.\n");
        cl_build_status buildStatus;
-       for(unsigned int i = 0; i < 1; i++) {
+       //for(unsigned int i = 2; i < 3; i++) {
 
 		  // check if compiling and linking the program went fine
-          clGetProgramBuildInfo(mProgram, mDevices[i], CL_PROGRAM_BUILD_STATUS,
+          clGetProgramBuildInfo(mProgram, mDevices[mSelectedDeviceIndex], CL_PROGRAM_BUILD_STATUS,
                            sizeof(cl_build_status), &buildStatus, NULL);
-          if(buildStatus == CL_SUCCESS) {
-             continue;
+          
+		  if(buildStatus != CL_SUCCESS) {
+              char *buildLog;
+			  size_t buildLogSize;
+			  // get size of build log
+			  clGetProgramBuildInfo(mProgram, mDevices[mSelectedDeviceIndex], CL_PROGRAM_BUILD_LOG,
+							   0, NULL, &buildLogSize);
+			  buildLog = (char*)malloc(buildLogSize);
+			  if(buildLog == NULL) {
+				 perror("malloc");
+				 //exit(-1);
+				 __debugbreak();
+			  }
+			  // create buildlog
+			  clGetProgramBuildInfo(mProgram, mDevices[mSelectedDeviceIndex], CL_PROGRAM_BUILD_LOG,
+							   buildLogSize, buildLog, NULL);
+			  buildLog[buildLogSize-1] = '\0';
+			  printf("Device %u Build Log:\n%s\n", mSelectedDeviceIndex, buildLog);   
+			  free(buildLog);
           }
-
-          char *buildLog;
-          size_t buildLogSize;
-		  // get size of build log
-          clGetProgramBuildInfo(mProgram, mDevices[i], CL_PROGRAM_BUILD_LOG,
-                           0, NULL, &buildLogSize);
-          buildLog = (char*)malloc(buildLogSize);
-          if(buildLog == NULL) {
-             perror("malloc");
-             //exit(-1);
-			 __debugbreak();
-          }
-		  // create buildlog
-          clGetProgramBuildInfo(mProgram, mDevices[i], CL_PROGRAM_BUILD_LOG,
-                           buildLogSize, buildLog, NULL);
-          buildLog[buildLogSize-1] = '\0';
-          printf("Device %u Build Log:\n%s\n", i, buildLog);   
-          free(buildLog);
-       }
        //exit(0);
 	   __debugbreak();
     }
@@ -757,17 +793,44 @@ void Gameoflife<T>::openCL_initKernel() {
     mKernel = clCreateKernel(mProgram, "calcGeneration", &status);
     if(status != CL_SUCCESS) {
        printf("clCreateKernel failed\n");
+	   __debugbreak();
        exit(-1);
     }
 
     // Associate the input and output buffers with the kernel 
 	status = clSetKernelArg(mKernel, 0, sizeof(int), &mXDim);
+	
+	if(status != CL_SUCCESS) {
+       printf("clSetKernelArg failed\n");
+	   __debugbreak();
+       exit(-1);
+    }
+
 	status |= clSetKernelArg(mKernel, 1, sizeof(int), &mYDim);
+
+	if(status != CL_SUCCESS) {
+       printf("clSetKernelArg failed\n");
+	   __debugbreak();
+       exit(-1);
+    }
 	status |= clSetKernelArg(mKernel, 2, sizeof(cl_mem), &mMemIn);
+
+	if(status != CL_SUCCESS) {
+       printf("clSetKernelArg failed\n");
+	   __debugbreak();
+       exit(-1);
+    }
     status |= clSetKernelArg(mKernel, 3, sizeof(cl_mem), &mMemOut);
+
+	if(status != CL_SUCCESS) {
+       printf("clSetKernelArg failed\n");
+	   __debugbreak();
+       exit(-1);
+    }
     
 	if(status != CL_SUCCESS) {
        printf("clSetKernelArg failed\n");
+	   __debugbreak();
        exit(-1);
     }
 }
